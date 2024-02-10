@@ -1,0 +1,39 @@
+class TransformerEncoder(nn.Module):
+    def __init__(self, input_dim, hidden_dim, num_layers, num_heads):
+        super(TransformerEncoder, self).__init__()
+        self.embedding = nn.Linear(input_dim, hidden_dim)
+        self.encoder_layers = nn.TransformerEncoderLayer(hidden_dim, num_heads)
+        self.encoder = nn.TransformerEncoder(self.encoder_layers, num_layers)
+
+    def forward(self, x):
+        x = self.embedding(x)
+        x = self.temporal_conv(x)
+        x = x.permute(1, 0, 2)
+        x = self.pos_encoder(x)
+        encoder_output = self.encoder(x)
+        return encoder_output.permute(1, 0, 2)
+
+
+class RNNDecoder(nn.Module):
+    def __init__(self, input_dim, hidden_dim, num_layers, output_dim):
+        """output dim is not actually the output dim. It is hidden dim 2."""
+        super(RNNDecoder, self).__init__()
+        self.output_dim = output_dim
+        self.rnn = nn.GRU(
+            input_size=input_dim,
+            hidden_size=hidden_dim,
+            num_layers=num_layers,
+            dropout=0.3,
+            batch_first=True,
+        )
+        self.fc1 = nn.Linear(hidden_dim, 1)
+        self.fc2 = nn.Linear(output_dim, hidden_dim)
+
+    def forward(self, encoder_output):
+        decoder_output = self.rnn(encoder_output)[0]
+        # print(decoder_output.shape)
+        decoder_output = decoder_output[:, -self.output_dim:, :]
+        decoder_output = self.fc1(decoder_output)
+        decoder_output = decoder_output[:, :, 0]
+        decoder_output = self.fc2(decoder_output)
+        return decoder_output
