@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import torch
 import random
 
-from ts_pred_helper import *
+from project.ts_pred_helper import *
 
 
 def func1():
