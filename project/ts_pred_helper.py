@@ -9,6 +9,8 @@ import pickle
 import pickle5
 from sklearn.preprocessing import MinMaxScaler
 
+from data import *
+
 
 
 def rmse(predictions, targets):
@@ -51,50 +53,6 @@ def mape(predictions, targets):
     """
     targets[targets==0] = np.nan
     return np.nanmean(np.abs((predictions - targets) / targets)) * 100
-
-
-# data prep
-def gaussian_noise(n=1):
-    return np.random.normal(size=(n))
-
-
-def ar_data_generator(init_seq, weights, noise_func, steps=500, normalize=False):
-    """Generate AR(n) simulation data.
-
-    Args:
-        init_seq (np.array): Initial values to start with. An AR(n) process should have n initial values.
-        weights (np.array): Weights on each prev time step and the noise term.
-        noise_func (func): Calling this noise function gives a random term.
-        steps (int): Length of the generated sequence.
-    """
-    init_steps = len(init_seq)
-    sim_data = np.zeros(steps + init_steps)
-    sim_data[:init_steps] = init_seq
-    for i in range(steps):
-        cur_val = 0
-        for j in range(init_steps):
-            cur_val += weights[j] * sim_data[i+j]
-        cur_val += weights[-1] * noise_func()
-        sim_data[i+init_steps] = cur_val
-    sim_data = sim_data[init_steps:]
-    if normalize:
-        sim_data = (sim_data - np.mean(sim_data)) / np.std(sim_data)
-    return sim_data
-
-
-def multi_variate_data_generator(init_data, theta, u, noise_func, steps, dist_shift_factor):
-    seq_data_list = []
-    cur_data = np.array(init_data)
-    for _ in range(steps):
-        u = u + dist_shift_factor
-        u = u / np.linalg.norm(u)
-        u = u[None, :]
-        trans_mat = u * u.transpose()
-        u = np.squeeze(u)
-        new_data = trans_mat @ cur_data + theta * np.array(noise_func())
-        cur_data = new_data
-        seq_data_list.append(new_data)
-    return np.array(seq_data_list)
 
 
 class SeqData(torch.utils.data.Dataset):
@@ -147,86 +105,6 @@ def prepare_ts_ds(data, window_size, target_idx, train_size, val_size, test_size
     return train_dataloader, val_dataloader, test_dataloader
 
 
-# models
-class FF(nn.Module):
-    def __init__(self, input_dim, seq_length, hidden_dim, output_dim=1):
-        super(FF, self).__init__()
-        self.fc1 = nn.Linear(input_dim*seq_length, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
-        self.fc3 = nn.Linear(hidden_dim, output_dim)
-        self.relu = nn.ReLU()
-
-    def forward(self, x):
-        # (batch size x seq length x input dim)
-        x = x.view(x.shape[0], -1)
-        x = self.relu(self.fc1(x))
-        x = self.relu(self.fc2(x))
-        x = self.fc3(x)
-        return x[:, 0]
-
-
-class RNN(nn.Module):
-    def __init__(self, input_dim, hidden_dim, num_layers, output_dim):
-        super(RNN, self).__init__()
-        self.rnn = nn.GRU(
-            input_size=input_dim,
-            hidden_size=hidden_dim,
-            num_layers=num_layers,
-            dropout=0.0,
-            batch_first=True,
-        )
-        self.relu = nn.ReLU()
-        self.fc1 = nn.Linear(hidden_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
-        self.fc3 = nn.Linear(hidden_dim, output_dim)
-
-    def forward(self, x):
-        x = self.rnn(x)[0]
-        x = x[:, -1, :]
-        x = self.relu(self.fc1(x))
-        x = self.relu(self.fc2(x))
-        x = self.fc3(x)
-        return x[:, 0]
-
-
-class TemporalConvolution(nn.Module):
-
-    def __init__(self, input_dim, hidden_dim):
-        super(TemporalConvolution, self).__init__()
-        self.conv1d = nn.Conv1d(input_dim, hidden_dim, kernel_size=3, padding=1)
-
-    def forward(self, x):
-        # Permute the input for 1D convolution
-        x = x.permute(1, 2, 0)
-        conv_out = self.conv1d(x)
-        # Revert the permutation
-        conv_out = conv_out.permute(2, 0, 1)
-        return conv_out
-
-
-class Transformer(nn.Module):
-    def __init__(self, input_dim, hidden_dim, num_layers, num_heads, seq_len, output_dim=1):
-        super(Transformer, self).__init__()
-        self.embedding = nn.Linear(input_dim, hidden_dim)
-        self.encoder_layers = nn.TransformerEncoderLayer(hidden_dim, num_heads, dropout=0.5)
-        self.encoder = nn.TransformerEncoder(self.encoder_layers, num_layers)
-        self.temporal_conv = TemporalConvolution(hidden_dim, hidden_dim)
-        self.fc1 = nn.Linear(hidden_dim*seq_len, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, output_dim)
-        self.relu = nn.ReLU()
-
-    def forward(self, x):
-        x = self.embedding(x)
-        x = self.temporal_conv(x)
-        x = x.permute(1, 0, 2)
-        encoder_output = self.encoder(x)
-        encoder_output = encoder_output.permute(1, 0, 2)
-        encoder_output = encoder_output.reshape(encoder_output.shape[0], -1)
-        x = self.relu(self.fc1(encoder_output))
-        x = self.fc2(x)
-        return encoder_output[:, 0]
-
-
 def perfect_model(x, weights):
     """
     x is in the shape of (batch size x seq length x input dim)
@@ -245,6 +123,63 @@ def set_seed(seed=1):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
+
+
+def train_eval1(model, data, window_size, epochs):
+    learning_rate = 2e-5
+    device = torch.device('cuda:0')
+    
+    train_dl, val_dl, test_dl = prepare_ts_ds(data, window_size, 0, 2000, 500, 1000, 32)
+
+    model = model.to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    loss_fn = nn.L1Loss()
+
+    for _ in range(epochs):
+        model.train()
+        losses = []
+        for batch in train_dl:
+            x, y = batch
+            x = x.to(device)
+            y = y.to(device)
+            y_pred = model(x)
+            loss = loss_fn(y, y_pred)
+            optimizer.zero_grad()
+            loss.backward()
+            # torch.nn.utils.clip_grad_norm_(model.parameters(), 1, error_if_nonfinite=True)
+            optimizer.step()
+            losses.append(loss.detach().cpu().numpy())
+        # print(f'loss is {np.mean(losses)}')
+        model.eval()
+        val_losses = []
+        for batch in val_dl:
+            x, y = batch
+            x = x.to(device)
+            y = y.to(device)
+            # print(y.shape)
+            y_pred = model(x)
+            # print(y_pred.shape)
+            loss = loss_fn(y, y_pred)
+            val_losses.append(loss.detach().cpu().numpy())
+        # print(f'val loss is {np.mean(val_losses)}, perfect loss: {np.mean(plosses)}')
+    # test
+    model.eval()
+    tys = []
+    pys = []
+    for batch in test_dl:
+        x, y = batch
+        x = x.to(device)
+        y = y.to(device)
+        y_pred = model(x)
+        # save
+        y_pred = y_pred.detach().cpu().numpy()
+        y = y.detach().cpu().numpy()
+        for i in range(len(y)):
+            tys.append(y[i])
+            pys.append(y_pred[i])
+    tys = np.array(tys)
+    pys = np.array(pys)    
+    return tys, pys
 
 
 def train_eval(model, init_seq, weights, noise_func, normalize=False, data_type='ar', theta=1, dist_shift_factor=None, window_size=3, epochs=200):
