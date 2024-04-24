@@ -30,11 +30,15 @@ def ar_data_generator(init_seq, weights, noise_func, steps=500, normalize=False)
     return sim_data
 
 
-def mytan(x):
+def nonlinear_func1(x):
+    if np.tan(x) > 1:
+        return 1
+    elif np.tan(x) < -1:
+        return -1
     return np.tan(x)
 
 
-def ar_nonlinear_generator(init_seq, weights, noise_func, nonlinear_func=mytan, steps=500, normalize=False):
+def ar_nonlinear_generator(init_seq, weights, noise_func, nonlinear_func=nonlinear_func1, steps=500, normalize=False):
     """Generate nonlinear AR(n) simulation data.
 
     Args:
@@ -82,6 +86,6 @@ def get_data(data_type, init_seq=None, weights=None, noise_func=None, normalize=
         sim_data = multi_variate_data_generator(init_data=init_seq, theta=theta, u=weights, noise_func=noise_func, steps=steps, dist_shift_factor=dist_shift_factor)
         data = sim_data[100:, :]
     elif data_type == 'nonlinear_ar':
-        sim_data = ar_nonlinear_generator(init_seq, weights, noise_func, steps, normalize=normalize)
+        sim_data = ar_nonlinear_generator(init_seq, weights, noise_func, steps=steps, normalize=normalize)
         data = sim_data[100:, None]
     return data
