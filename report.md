@@ -1,4 +1,5 @@
-In this project, I explored the performance of time series forecasting models under the setting of autoregressively generated data. In the following sections, I will explain the data generation process, model and discuss some of the experimental results. The code is available at https://github.com/RRemixx/eecs598003.git. \\
+In this project, I explored the performance of time series forecasting models under the setting of autoregressively generated data. In the following sections, I will explain the data generation process, model and discuss some of the experimental results. The code is available at https://github.com/RRemixx/eecs598003.git.
+
 ## Data generation
 The time series data used in this project are generated autoregressively, following the equation below:
 
