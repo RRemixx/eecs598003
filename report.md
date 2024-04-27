@@ -35,7 +35,7 @@ The architecture of four models are fixed. I changed the number of neurons, i.e.
 ### Performance v.s. noise (nonlinear data)
 ![nonlinearRMSE](project/images/nonlinearRMSE.png)
 
-<!-- TODO -->
+When using nonlinear data, the performance of these four models are almost the same and only depends on the amount of noise.
 
 
 ### Performance when using different number of neurons (nonlinear data)
