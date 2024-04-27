@@ -30,9 +30,7 @@ For the second one, I think it's because the data is over simplified. Following 
 ### Performance when using different number of neurons
 ![linearWidth](project/images/width.png)
 
-The architecture of four models are fixed. I changed the number of neurons, i.e. the hidden size. The figure below shows the change of RMSE when the number of neurons changes. The x axis is $log_2(hidden\_size)$, y axis is RMSE. 
-
-The performance of these models is still the same as the prevous experiment. All the models behave better when the hidden size is increased. Surprisingly, the transformer model requires the most number of neurons to achieve a good performance.
+The architecture of four models are fixed. I changed the number of neurons, i.e. the hidden size. The figure below shows the change of RMSE when the number of neurons changes. The x axis is $log_2(hidden\_size)$, y axis is RMSE. The performance of these models is still the same as the prevous experiment. All the models behave better when the hidden size is increased. Surprisingly, the transformer model requires the most number of neurons to achieve a good performance.
 
 ### Performance v.s. noise (nonlinear data)
 ![nonlinearRMSE](project/images/nonlinearRMSE.png)
